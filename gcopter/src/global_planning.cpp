@@ -11,6 +11,7 @@
 #include <geometry_msgs/Point.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <sensor_msgs/PointCloud2.h>
+#include <nav_msgs/Odometry.h>
 
 #include <cmath>
 #include <iostream>
@@ -23,6 +24,8 @@
 struct Config
 {
     std::string mapTopic;
+    std::string odomTopic;
+    bool useOdometry;
     std::string targetTopic;
     double dilateRadius;
     double voxelWidth;
@@ -48,6 +51,8 @@ struct Config
     Config(const ros::NodeHandle &nh_priv)
     {
         nh_priv.getParam("MapTopic", mapTopic);
+        nh_priv.getParam("OdomTopic", odomTopic);
+        nh_priv.getParam("UseOdometry", useOdometry);
         nh_priv.getParam("TargetTopic", targetTopic);
         nh_priv.getParam("DilateRadius", dilateRadius);
         nh_priv.getParam("VoxelWidth", voxelWidth);
@@ -237,10 +242,26 @@ public:
             {
                 startGoal.clear();
             }
+
+            geometry_msgs::PoseStamped pose_stamped_msg;
+
+            if (config.useOdometry && startGoal.empty())
+            {
+                boost::shared_ptr<nav_msgs::Odometry const> msg =
+                    ros::topic::waitForMessage<nav_msgs::Odometry>(config.odomTopic, nh, ros::Duration(10)); // 10 seconds timeout
+                pose_stamped_msg.header = msg->header;                                                       // Use the same header (frame_id and timestamp)
+                pose_stamped_msg.pose = msg->pose.pose;                                                      // Copy the pose information
+            }
+            else
+            {
+                pose_stamped_msg.header = msg->header; // Use the same header (frame_id and timestamp)
+                pose_stamped_msg.pose = msg->pose;     // Copy the pose information
+            }
+
             const double zGoal = config.mapBound[4] + config.dilateRadius +
-                                 fabs(msg->pose.orientation.z) *
+                                 fabs(pose_stamped_msg.pose.orientation.z) *
                                      (config.mapBound[5] - config.mapBound[4] - 2 * config.dilateRadius);
-            const Eigen::Vector3d goal(msg->pose.position.x, msg->pose.position.y, zGoal);
+            const Eigen::Vector3d goal(pose_stamped_msg.pose.position.x, pose_stamped_msg.pose.position.y, zGoal);
             if (voxelMap.query(goal) == 0)
             {
                 visualizer.visualizeStartGoal(goal, 0.5, startGoal.size());

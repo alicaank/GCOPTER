@@ -1,4 +1,8 @@
-MapTopic:                   '/voxel_map'
+MapTopic:                   '/os_cloud_node/points'
+
+OdomTopic:                  ''
+
+UseOdometry:                False
 
 TargetTopic:                '/move_base_simple/goal'
 
